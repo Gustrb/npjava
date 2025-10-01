@@ -45,6 +45,7 @@ impl CodeAttribute {
             let opcode = BigEndianByteOrder::read_u8(&self.code, offset)?;
             offset += 1;
 
+            // https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-6.html#jvms-6.5
             match opcode {
                 LDC => {
                     let index = BigEndianByteOrder::read_u8(&self.code, offset)?;

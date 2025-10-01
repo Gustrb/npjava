@@ -213,6 +213,21 @@ impl ConstantPool {
             Err(format!("Constant pool entry at index {} is not a UTF8 entry", index))
         }
     }
+
+    pub fn find_string_constant_pool_entry(&self, index: u16) -> Result<StringConstantPoolEntry, String> {
+        // Constant pool is 1-indexed, so we need to subtract 1 from the index
+        let entry_index = (index as usize) - 1;
+        
+        if entry_index >= self.entries.len() {
+            return Err(format!("Constant pool index out of bounds: {}", index));
+        }
+
+        if let ConstantPoolEntry::String(entry) = &self.entries[entry_index] {
+            Ok(entry.clone())
+        } else {
+            Err(format!("Constant pool entry at index {} is not a string entry", index))
+        }
+    }
 }
 
 pub fn parse_constant_pool_entry(bytecode: &Vec<u8>, mut offset: usize) -> Result<(ConstantPoolEntry, usize), String> {

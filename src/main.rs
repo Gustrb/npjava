@@ -14,7 +14,6 @@ fn main() {
     match parsed_bytecode {
         Err(e) => println!("Error: {}", e),
         Ok(parsed_bytecode) => {
-            bytecode::print_bytecode_methods(&parsed_bytecode).unwrap();
 
             match codegen::x86_64::codegen(&parsed_bytecode) {
                 Ok(_) => println!("Codegen successful"),
