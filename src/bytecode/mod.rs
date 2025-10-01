@@ -6,7 +6,7 @@ pub mod endianness;
 use std::{fs::File, io::Read};
 use crate::bytecode::attribute::Attribute;
 use crate::bytecode::endianness::{BigEndianByteOrder, ByteOrder};
-use crate::bytecode::constantpool::ConstantPoolEntry;
+use crate::bytecode::constantpool::ConstantPool;
 use crate::bytecode::method::Method;
 
 #[derive(Debug, Default)]
@@ -14,7 +14,7 @@ pub struct ParsedBytecode {
     pub minor_version: u16,
     pub major_version: u16,
     pub constant_pool_count: u16,
-    pub constant_pool: Vec<ConstantPoolEntry>,
+    pub constant_pool: ConstantPool,
     pub access_flags: u16,
     pub this_class: u16,
     pub super_class: u16,
@@ -91,43 +91,16 @@ pub fn parse_bytecode(bytecode: &Vec<u8>) -> Result<ParsedBytecode, String> {
 
 fn parse_constant_pool(parsed_bytecode: &mut ParsedBytecode, bytecode: &Vec<u8>, mut offset: usize) -> Result<usize, String> {
     // For some dumb reason, the constant pool count is 1 indexed.
-    parsed_bytecode.constant_pool.reserve(parsed_bytecode.constant_pool_count as usize - 1);
+    parsed_bytecode.constant_pool.entries.reserve(parsed_bytecode.constant_pool_count as usize - 1);
 
     for _ in 1..parsed_bytecode.constant_pool_count {
-        let (entry, entry_offset) = parse_constant_pool_entry(bytecode, offset)?;
+        let (entry, entry_offset) = constantpool::parse_constant_pool_entry(bytecode, offset)?;
         println!("Parsed constant pool entry: {:?}", entry);
-        parsed_bytecode.constant_pool.push(entry);
+        parsed_bytecode.constant_pool.entries.push(entry);
         offset = entry_offset;
     }
 
     return Ok(offset);
-}
-
-fn parse_constant_pool_entry(bytecode: &Vec<u8>, mut offset: usize) -> Result<(ConstantPoolEntry, usize), String> {
-    let tag = BigEndianByteOrder::read_u8(bytecode, offset)?;
-    offset += 1;
-
-    match tag {
-        constantpool::CONSTANT_CLASS_INFO => {
-            return constantpool::parse_class_info_constant_pool_entry(bytecode, offset);
-        },
-        constantpool::CONSTANT_METHOD_REF => {
-            return constantpool::parse_method_ref_constant_pool_entry(bytecode, offset);
-        },
-        constantpool::CONSTANT_NAME_AND_TYPE => {
-            return constantpool::parse_name_and_type_constant_pool_entry(bytecode, offset);
-        },
-        constantpool::CONSTANT_UTF8 => {
-            return constantpool::parse_utf8_constant_pool_entry(bytecode, offset);
-        },
-        constantpool::CONSTANT_FIELD_REF => {
-            return constantpool::parse_field_ref_constant_pool_entry(bytecode, offset);
-        },
-        constantpool::CONSTANT_STRING => {
-            return constantpool::parse_string_constant_pool_entry(bytecode, offset);
-        },
-        _ => todo!("Implement parsing a constant pool entry, tag: {}", tag),
-    }
 }
 
 fn parse_interfaces(parsed_bytecode: &mut ParsedBytecode, bytecode: &Vec<u8>, mut offset: usize) -> Result<usize, String> {
@@ -177,4 +150,26 @@ fn parse_attributes(parsed_bytecode: &mut ParsedBytecode, bytecode: &Vec<u8>, mu
     }
 
     return Ok(offset);
+}
+
+pub fn print_bytecode_methods(parsed_bytecode: &ParsedBytecode) -> Result<(), String> {
+    for method in &parsed_bytecode.methods {
+        let name = parsed_bytecode.constant_pool.find_utf8_constant_pool_entry(method.name_index)?;
+        let descriptor = parsed_bytecode.constant_pool.find_utf8_constant_pool_entry(method.descriptor_index)?;
+        println!("Method: {} {}", name.bytes, descriptor.bytes);
+
+        for attribute in &method.attributes {
+            let name = parsed_bytecode.constant_pool.find_utf8_constant_pool_entry(attribute.name_index)?;
+            println!("Attribute: {}", name.bytes);
+
+            if name.bytes == "Code" {
+                let code_attribute = attribute.into_code_attribute()?;
+                println!("Code attribute: {:?}", code_attribute);
+                let code_instructions = code_attribute.into_code_instructions()?;
+                println!("Code instructions: {:?}", code_instructions);
+            }
+        }
+    }
+
+    Ok(())
 }

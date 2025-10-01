@@ -1,6 +1,7 @@
 use std::env;
 
 pub mod bytecode;
+pub mod codegen;
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -11,7 +12,14 @@ fn main() {
 
     let parsed_bytecode = bytecode::from_file(&args[0]);
     match parsed_bytecode {
-        Ok(parsed_bytecode) => println!("{:?}", parsed_bytecode),
         Err(e) => println!("Error: {}", e),
+        Ok(parsed_bytecode) => {
+            bytecode::print_bytecode_methods(&parsed_bytecode).unwrap();
+
+            match codegen::x86_64::codegen(&parsed_bytecode) {
+                Ok(_) => println!("Codegen successful"),
+                Err(e) => println!("Error: {}", e),
+            }
+        }
     }
 }

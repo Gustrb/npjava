@@ -32,7 +32,6 @@ pub fn parse_method(bytecode: &Vec<u8>, mut offset: usize) -> Result<(Method, us
         offset = attribute_offset;
     }
 
-
     Ok((Method {
         access_flags,
         name_index,
