@@ -16,7 +16,9 @@ pub enum ConstantPoolEntry {
     Utf8(Utf8ConstantPoolEntry),
     MethodHandle(MethodHandleConstantPoolEntry),
     MethodType(MethodTypeConstantPoolEntry),
-    InvokeDynamic(InvokeDynamicConstantPoolEntry)
+    InvokeDynamic(InvokeDynamicConstantPoolEntry),
+    // Used for the second half of a double constant pool entry
+    Dummy,
 }
 
 #[derive(Debug, Clone)]
@@ -115,6 +117,7 @@ pub struct InvokeDynamicConstantPoolEntry {
 const CONSTANT_UTF8: u8 = 1;
 const CONSTANT_CLASS_INFO: u8 = 7;
 const CONSTANT_STRING: u8 = 8;
+const CONSTANT_DOUBLE: u8 = 6;
 const CONSTANT_FIELD_REF: u8 = 9;
 const CONSTANT_METHOD_REF: u8 = 10;
 const CONSTANT_NAME_AND_TYPE: u8 = 12;
@@ -192,6 +195,19 @@ pub fn parse_string_constant_pool_entry(bytecode: &Vec<u8>, mut offset: usize) -
     }), offset))
 }
 
+pub fn parse_double_constant_pool_entry(bytecode: &Vec<u8>, mut offset: usize) -> Result<(ConstantPoolEntry, usize), String> {
+    let high_bytes = BigEndianByteOrder::read_u32(bytecode, offset)?;
+    offset += 4;
+    let low_bytes = BigEndianByteOrder::read_u32(bytecode, offset)?;
+    offset += 4;
+
+    Ok((ConstantPoolEntry::Double(DoubleConstantPoolEntry {
+        tag: CONSTANT_DOUBLE,
+        low_bytes,
+        high_bytes,
+    }), offset))
+}
+
 #[derive(Debug, Default)]
 pub struct ConstantPool {
     // TODO: Maybe use a BTreeMap instead of a Vec?
@@ -228,12 +244,28 @@ impl ConstantPool {
             Err(format!("Constant pool entry at index {} is not a string entry", index))
         }
     }
+
+    pub fn find_double_constant_pool_entry(&self, index: u16) -> Result<DoubleConstantPoolEntry, String> {
+        // Constant pool is 1-indexed, so we need to subtract 1 from the index
+        let entry_index = (index as usize) - 1;
+        
+        if entry_index >= self.entries.len() {
+            return Err(format!("Constant pool index out of bounds: {}", index));
+        }
+
+        if let ConstantPoolEntry::Double(entry) = &self.entries[entry_index] {
+            Ok(entry.clone())
+        } else {
+            Err(format!("Constant pool entry at index {} is not a double entry", index))
+        }
+    }
 }
 
 pub fn parse_constant_pool_entry(bytecode: &Vec<u8>, mut offset: usize) -> Result<(ConstantPoolEntry, usize), String> {
     let tag = BigEndianByteOrder::read_u8(bytecode, offset)?;
     offset += 1;
 
+    println!("Parsing constant pool entry, tag: {}", tag);
     match tag {
         CONSTANT_CLASS_INFO => {
             return parse_class_info_constant_pool_entry(bytecode, offset);
@@ -252,6 +284,9 @@ pub fn parse_constant_pool_entry(bytecode: &Vec<u8>, mut offset: usize) -> Resul
         },
         CONSTANT_STRING => {
             return parse_string_constant_pool_entry(bytecode, offset);
+        },
+        CONSTANT_DOUBLE => {
+            return parse_double_constant_pool_entry(bytecode, offset);
         },
         _ => todo!("Implement parsing a constant pool entry, tag: {}", tag),
     }

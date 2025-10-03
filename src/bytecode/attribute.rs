@@ -30,9 +30,14 @@ pub struct CodeAttribute {
 }
 
 const LDC: u8 = 18;
+const LDC2_W: u8 = 20;
 const ALOAD_0: u8 = 42;
+const DCMPG: u8 = 152;
+const IFGE: u8 = 156;
+const GOTO: u8 = 167;
 const INVOKE_VIRTUAL: u8 = 182;
 const INVOKE_SPECIAL: u8 = 183;
+const INVOKE_STATIC: u8 = 184;
 const RETURN: u8 = 177;
 const GET_STATIC: u8 = 178;
 
@@ -49,29 +54,52 @@ impl CodeAttribute {
             match opcode {
                 LDC => {
                     let index = BigEndianByteOrder::read_u8(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::Ldc(index, offset-1));
                     offset += 1;
-                    code_instructions.push(CodeInstruction::Ldc(index));
+                },
+                LDC2_W => {
+                    let index = BigEndianByteOrder::read_u16(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::Ldc2W(index, offset-1));
+                    offset += 2;
                 },
                 ALOAD_0 => {
-                    code_instructions.push(CodeInstruction::Aload0);
+                    code_instructions.push(CodeInstruction::Aload0(offset-1));
+                },
+                DCMPG => {
+                    code_instructions.push(CodeInstruction::Dcmpg(offset-1)); // Placeholder, implement DCMPG properly later
+                },
+                IFGE => {
+                    let branch_offset = BigEndianByteOrder::read_u16(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::Ifge(branch_offset, offset-1));
+                    offset += 2;
+                },
+                GOTO => {
+                    let branch_offset = BigEndianByteOrder::read_u16(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::Goto(branch_offset, offset-1));
+                    offset += 2;
                 },
                 INVOKE_VIRTUAL => {
                     let index = BigEndianByteOrder::read_u16(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::InvokeVirtual(index, offset-1));
                     offset += 2;
-                    code_instructions.push(CodeInstruction::InvokeVirtual(index));
                 },
                 INVOKE_SPECIAL => {
                     let index = BigEndianByteOrder::read_u16(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::InvokeSpecial(index, offset-1));
                     offset += 2;
-                    code_instructions.push(CodeInstruction::InvokeSpecial(index));
+                },
+                INVOKE_STATIC => {
+                    let index = BigEndianByteOrder::read_u16(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::InvokeStatic(index, offset-1));
+                    offset += 2;
                 },
                 RETURN => {
-                    code_instructions.push(CodeInstruction::Return);
+                    code_instructions.push(CodeInstruction::Return(offset-1));
                 },
                 GET_STATIC => {
                     let index = BigEndianByteOrder::read_u16(&self.code, offset)?;
+                    code_instructions.push(CodeInstruction::GetStatic(index, offset-1));
                     offset += 2;
-                    code_instructions.push(CodeInstruction::GetStatic(index));
                 },
                 _ => todo!("Implement parsing a code instruction, opcode: {}", opcode),
             }
@@ -83,12 +111,17 @@ impl CodeAttribute {
 
 #[derive(Debug)]
 pub enum CodeInstruction {
-    Ldc(u8),
-    Aload0,
-    InvokeVirtual(u16),
-    InvokeSpecial(u16),
-    GetStatic(u16),
-    Return,
+    Ldc(u8, usize),
+    Ldc2W(u16, usize),
+    Aload0(usize),
+    Dcmpg(usize),
+    Ifge(u16, usize),
+    Goto(u16, usize),
+    InvokeVirtual(u16, usize),
+    InvokeSpecial(u16, usize),
+    InvokeStatic(u16, usize),
+    GetStatic(u16, usize),
+    Return(usize),
 }
 
 pub fn parse_attribute(bytecode: &Vec<u8>, mut offset: usize) -> Result<(Attribute, usize), String> {
