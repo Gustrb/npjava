@@ -93,11 +93,21 @@ fn parse_constant_pool(parsed_bytecode: &mut ParsedBytecode, bytecode: &Vec<u8>,
     // For some dumb reason, the constant pool count is 1 indexed.
     parsed_bytecode.constant_pool.entries.reserve(parsed_bytecode.constant_pool_count as usize - 1);
 
-    for _ in 1..parsed_bytecode.constant_pool_count {
+    let mut i = 1;
+    while i < parsed_bytecode.constant_pool_count {
         let (entry, entry_offset) = constantpool::parse_constant_pool_entry(bytecode, offset)?;
         println!("Parsed constant pool entry: {:?}", entry);
-        parsed_bytecode.constant_pool.entries.push(entry);
+        
+        parsed_bytecode.constant_pool.entries.push(entry.clone());
         offset = entry_offset;
+        
+        // Double and Long entries take up two slots in the constant pool
+        if matches!(entry, constantpool::ConstantPoolEntry::Double(_) | constantpool::ConstantPoolEntry::Long(_)) {
+            parsed_bytecode.constant_pool.entries.push(constantpool::ConstantPoolEntry::Dummy);
+            i += 1;
+        }
+
+        i += 1;
     }
 
     return Ok(offset);
